@@ -1,12 +1,26 @@
 # Will It Fall? Fall risk in generative world models (Unitree Go2)
 
+![Same start state, two futures: one recovers, one falls after a push](paper/figs/fork.gif)
+
+*One state on stairs, copied exactly. Both copies get the same commands and differ only in
+the random pushes that arrive later (red border = push). Over 128 copies, 34% of the
+futures from this state fall.*
+
 Do diffusion and flow-matching world models predict robot failures as often as they really
 happen? We simulate a Unitree Go2 in MuJoCo walking on varied terrain while random pushes
 hit it. At each test state we fork the simulator (physics and controller state) 128 times,
 so we know the true probability that the robot falls in the next 2 s. Then we ask each world
 model for 128 sampled futures from the same state and count how many fall.
 
-Draft paper: [`paper/main.pdf`](paper/main.pdf).
+Draft paper: [`paper/main.pdf`](paper/main.pdf). Videos:
+[controller demo](media/controller_demo.mp4), [dataset episodes](media/dataset_episodes.mp4),
+[a world-model rollout](media/world_ep_100207.mp4).
+
+![Body tilt of 128 simulated futures and 128 samples from each model at one fork state](paper/figs/fig3_example.png)
+
+*The same fork state: body tilt over the next 2 s for the 128 true futures and for 128
+samples from each model. Red lines end in a fall. The simulator gives 44 falls, CFM 18,
+diffusion 12, C-NCM 46.*
 
 ## Main results (test set: 1,149 states, 319 forks with 0.05 < p < 0.95)
 
@@ -25,6 +39,31 @@ Draft paper: [`paper/main.pdf`](paper/main.pdf).
 - C-NCM does not rank states better: the Brier difference to CFM is not significant, and
   isotonic recalibration of CFM on held-out data matches it.
 - The final test was pre-registered (`PREREG_v3.md`): H1 and H2 held, H3 and H4 did not.
+
+<p>
+  <img src="paper/figs/fig5_ratio.png" width="48%" alt="Risk ratio at forks for each model, on truncated and fixed data">
+  <img src="paper/figs/fig8_steps.png" width="48%" alt="Risk ratio against network passes per sample">
+</p>
+
+*Left: predicted over true fall risk at forks (1 = unbiased), before and after the data fix.
+Right: the same ratio against sampling compute; flat models improve slowly with more steps.*
+
+## The logging pitfall
+
+<img src="paper/figs/fig4_truncation.png" width="55%" alt="Share of falls that happened by each time in the window">
+
+When logging stops 1 s after a fall, every training window that starts just before a fall
+runs past the end of the log and is never created. Only 4% of training windows with a fall
+then show it in the first second, while 51% of real falls happen there. Logging 100 steps
+after a fall fixes it, and `models/data.py` now refuses data with a shorter tail.
+
+## How C-NCM builds a future
+
+![Body tilt rebuilt level by level](paper/figs/fig2_levels.png)
+
+C-NCM samples a 4-step summary of the next 2 s first, then adds detail in five more levels
+(8, 16, 32, 64, 100 steps), each a flow-matching model over the residual. Whether the robot
+ends up on the ground is already visible in the first level.
 
 ## Layout
 
@@ -82,6 +121,7 @@ python evaluate.py --runs v3_cfm_s0 --nfe 64 --branches "../data/final/branch_*.
 python v3_stats.py                 # pre-registered statistics -> results/v3_stats.json
 
 cd ../paper
+python scripts/render_fork.py --gif figs/fork.gif   # Go2 renders and the GIF (re-simulated locally)
 python scripts/make_figs.py        # figures and the main table
 tectonic -X compile main.tex
 ```
