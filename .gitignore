@@ -1,0 +1,15 @@
+# generated data, checkpoints and logs (large; regenerate with the scripts)
+/data/
+/runs/
+/logs/
+# MuJoCo Menagerie checkout (see README for setup); our scene file lives in assets/patches/
+/assets/menagerie/
+__pycache__/
+*.pyc
+.DS_Store
+# LaTeX intermediates
+*.aux
+*.log
+*.out
+*.bbl
+*.blg

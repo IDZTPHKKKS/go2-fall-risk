@@ -1,0 +1,25 @@
+<mujoco model="go2 terrain scene">
+  <!-- ncm-robotics: Go2 on a 16 x 16 m heightfield (0.04 m cells). Heights are
+       written per episode by sim/terrain.py; data 0.5 = ground level z = 0,
+       range -0.3 .. +0.3 m. -->
+  <include file="go2.xml"/>
+
+  <visual>
+    <headlight diffuse="0.6 0.6 0.6" ambient="0.3 0.3 0.3" specular="0 0 0"/>
+    <rgba haze="0.15 0.25 0.35 1"/>
+    <global azimuth="-130" elevation="-20" offwidth="1280" offheight="720"/>
+  </visual>
+
+  <asset>
+    <texture type="skybox" builtin="gradient" rgb1="0.3 0.5 0.7" rgb2="0 0 0" width="512" height="3072"/>
+    <texture type="2d" name="groundplane" builtin="checker" mark="edge" rgb1="0.2 0.3 0.4" rgb2="0.1 0.2 0.3"
+      markrgb="0.8 0.8 0.8" width="300" height="300"/>
+    <material name="groundplane" texture="groundplane" texuniform="true" texrepeat="40 40" reflectance="0.1"/>
+    <hfield name="terrain" nrow="401" ncol="401" size="8 8 0.6 0.1"/>
+  </asset>
+
+  <worldbody>
+    <light pos="0 0 3" dir="0 0 -1" directional="true"/>
+    <geom name="floor" type="hfield" hfield="terrain" pos="0 0 -0.3" material="groundplane"/>
+  </worldbody>
+</mujoco>
