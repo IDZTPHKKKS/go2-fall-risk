@@ -16,11 +16,12 @@ Draft paper: [`paper/main.pdf`](paper/main.pdf). Videos:
 [controller demo](media/controller_demo.mp4), [dataset episodes](media/dataset_episodes.mp4),
 [a world-model rollout](media/world_ep_100207.mp4).
 
-![Body tilt of 128 simulated futures and 128 samples from each model at one fork state](paper/figs/fig3_example.png)
+![The 128 futures of one fork state grouped by outcome, for the simulator and each model](paper/figs/fig3_example.png)
 
-*The same fork state: body tilt over the next 2 s for the 128 true futures and for 128
-samples from each model. Red lines end in a fall. The simulator gives 44 falls, CFM 18,
-diffusion 12, C-NCM 46.*
+*The same fork state. Top: the 128 true futures and 128 samples from each model, grouped
+into falls within 1 s, falls after 1 s and recoveries (line = group median body tilt,
+band = middle 50%). Bottom: how many futures land in each group. The simulator gives 44
+falls (16 early), CFM 18 and diffusion 12 (almost all late), C-NCM 46.*
 
 ## Main results (test set: 1,149 states, 319 forks with 0.05 < p < 0.95)
 

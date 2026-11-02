@@ -10,6 +10,7 @@ import sys
 import h5py
 import matplotlib
 import matplotlib.ticker
+import matplotlib.lines
 import numpy as np
 
 matplotlib.use("pdf")
@@ -141,29 +142,76 @@ def fig_levels():
 
 
 # ---------------------------------------------------------------- figure 3: example fork
+GROUPS = [("early", "falls within 1 s", "#d03b3b"), ("late", "falls after 1 s", "#ec835a"),
+          ("rec", "recovers", "#7d8ca3")]
+
+
+def outcome_groups(tl, h):
+    """Group futures by outcome: first fall (tilt > 1 rad or height < 0.12 m) within the
+    first 50 steps (1 s), later, or never."""
+    bad = (tl > np.degrees(1.0)) | (h < 0.12)
+    first = np.where(bad.any(1), bad.argmax(1), -1)
+    return {"early": (first >= 0) & (first < 50), "late": first >= 50, "rec": first < 0}
+
+
 def fig_example(fd, e=0):
     t = np.arange(1, 101) * DT
-    srcs = [("true", "Simulator"), ("cfm", "CFM"), ("diff", "Diffusion"),
-            ("ncm4", "C-NCM (ours)")]
-    fig, ax = plt.subplots(1, 4, figsize=(FULL, 1.6), sharey=True, gridspec_kw=dict(wspace=0.08))
-    for a, (key, title) in zip(ax, srcs):
+    srcs = [("true", "Simulator"), ("cfm", "CFM"), ("diff", "Diffusion"), ("ncm4", "C-NCM (ours)")]
+    fig = plt.figure(figsize=(FULL, 2.9))
+    gs = fig.add_gridspec(2, 4, height_ratios=[2.1, 1.0], hspace=0.62, wspace=0.12)
+    shares = []
+    for j, (key, title) in enumerate(srcs):
+        a = fig.add_subplot(gs[0, j], sharey=fig.axes[0] if j else None)
         tl = np.degrees(fd[f"ex_{e}_{key}_tilt"].astype(np.float32))
         h = fd[f"ex_{e}_{key}_height"].astype(np.float32)
-        fell = ((tl > np.degrees(1.0)) | (h < 0.12)).any(1)
-        for tr, f in zip(tl, fell):
-            if not f:
-                a.plot(t, tr, color=SAFE, lw=0.4, alpha=0.35)
-        for tr, f in zip(tl, fell):
-            if f:
-                a.plot(t, tr, color=FALL, lw=0.5, alpha=0.6)
+        g = outcome_groups(tl, h)
+        shares.append([int(g[k].sum()) for k, _, _ in GROUPS])
+        for k, label, col in GROUPS[::-1]:
+            m = g[k]
+            if m.sum() < 3:
+                continue
+            lo, med, hi = np.percentile(tl[m], [25, 50, 75], axis=0)
+            a.fill_between(t, np.minimum(lo, 120), np.minimum(hi, 120), color=col, alpha=0.22, lw=0)
+            a.plot(t, np.minimum(med, 120), color=col, lw=1.4)
         a.axhline(np.degrees(1.0), color=INK, lw=0.6, ls="--")
-        a.set_title(f"{title}: {fell.sum()}/{len(fell)} fall", pad=2)
+        nf = int((~g["rec"]).sum())
+        a.set_title(f"{title}: {nf}/{len(tl)} fall", pad=3)
         a.set_xlabel("time ahead [s]")
         a.set_ylim(0, 120)
-    ax[0].set_ylabel("body tilt [deg]")
-    ax[0].text(0.05, np.degrees(1.0) + 3, "fall threshold", fontsize=6.5, color=INK)
+        a.set_xlim(0, 2)
+        a.set_xticks([0, 0.5, 1, 1.5, 2])
+        a.set_xticklabels(["0", "", "1", "", "2"])
+        a.grid(True, axis="y")
+        if j:
+            plt.setp(a.get_yticklabels(), visible=False)
+    ax0 = fig.axes[0]
+    ax0.set_ylabel("body tilt [deg]")
+    ax0.text(0.05, np.degrees(1.0) + 3, "fall threshold", fontsize=6.5, color=INK)
+    handles = [matplotlib.lines.Line2D([], [], color=c, lw=1.4) for _, _, c in GROUPS]
+    fig.axes[2].legend(handles, [l for _, l, _ in GROUPS], loc="upper left", fontsize=6.5,
+                       handlelength=1.4, borderaxespad=0.3)
+    # share of futures in each group
+    bx = fig.add_subplot(gs[1, :])
+    names = [tt for _, tt in srcs]
+    ys = np.arange(len(names))[::-1]
+    for y, row in zip(ys, shares):
+        left = 0
+        for (k, label, col), n in zip(GROUPS, row):
+            if n:
+                bx.barh(y, n, left=left, height=0.62, color=col, edgecolor="white", linewidth=1.2)
+                if n >= 7:
+                    bx.text(left + n / 2, y, str(n), ha="center", va="center", fontsize=6.5,
+                            color="white" if k != "rec" else INK)
+            left += n
+    bx.set_yticks(ys)
+    bx.set_yticklabels(names)
+    bx.set_xlim(0, 128)
+    bx.set_xticks([0, 32, 64, 96, 128])
+    bx.set_xlabel("number of the 128 futures in each group")
+    bx.spines["left"].set_visible(False)
+    bx.tick_params(axis="y", length=0)
     save(fig, "fig3_example")
-    print("  example", str(fd[f"ex_{e}_name"]))
+    print("  example", str(fd[f"ex_{e}_name"]), "groups (early, late, recover):", dict(zip(names, shares)))
 
 
 # ---------------------------------------------------------------- figure 4: truncation

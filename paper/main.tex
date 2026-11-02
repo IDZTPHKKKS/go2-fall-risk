@@ -361,11 +361,13 @@ samples 18 falls, diffusion 12 and \cncm{} 46.
 \begin{figure*}[t]
   \centering
   \includegraphics[width=\textwidth]{figs/fig3_example.pdf}
-  \caption{\textbf{One fork state} (stairs, strong pushes). Body tilt of 128 futures from the
-  simulator and 128 samples from each model (seed 0). Red lines end in a fall. The
-  simulator gives 44 falls; CFM and diffusion give far fewer. \cncm{} gives about the right
-  number, but its samples are noisier in the first few steps, which is one reason for its
-  worse energy distance.}
+  \caption{\textbf{One fork state} (stairs, strong pushes; seed-0 models). Top: the 128
+  futures from the simulator and 128 samples from each model, grouped by outcome; each line is
+  a group's median body tilt and the band its middle 50\% (groups with fewer than 3 futures
+  are not drawn). Bottom: how many futures land in each group. The simulator gives 44 falls,
+  16 of them within 1\,s. CFM and diffusion give 18 and 12, almost all late. \cncm{} gives 46
+  with about the right split, but its samples are noisier in the first few steps, which is one
+  reason for its worse energy distance.}
   \label{fig:example}
 \end{figure*}
 
