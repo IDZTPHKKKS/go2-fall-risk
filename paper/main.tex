@@ -25,14 +25,16 @@ the true probability that the robot falls in the next two seconds. We find two p
 First, a common logging choice, stopping the log shortly after a fall, hides almost all
 early falls from the model and halves the predicted risk. Second, even with clean data and
 64 sampling steps, diffusion and flow-matching world models predict only 57\% and 65\% of
-the true risk at uncertain states. More sampling steps close this gap only slowly: with
-512 steps they still predict 77\% and 83\%. A classifier trained on the same data with the
-same network is nearly unbiased (92\%). A coarse-to-fine model that first samples a rough
-version of the future and then adds detail, a continuous form of next-concept modeling
-(\cncm{}), removes the bias (105\%, 95\% CI 95--117\%), and with only 96 network passes it
-already matches what flow matching reaches with 512. The gain is in overall calibration, not in
-ranking: all models, including the classifier, rank states equally well, and simple
-recalibration on held-out data closes the gap. The main test was pre-registered.
+the true risk at uncertain states (41\% and 46\% on a second test set). More sampling steps
+close this gap only slowly: with 512 steps they still predict 77\% and 83\%. A classifier
+trained on the same data with the same network is nearly unbiased (92\%). A coarse-to-fine
+model that first samples a rough version of the future and then adds detail, a continuous
+form of next-concept modeling (\cncm{}), brings the predicted risk close to the truth (105\%,
+95\% CI 95--117\%; 89\% on the second test set), and with only 96 network passes it already
+matches what flow matching reaches with 512. The gain is in overall calibration, not in
+ranking: all models, including the classifier, rank states equally well, and recalibrating
+a flat model on held-out data gives the same per-state accuracy. The main test was
+pre-registered.
 \end{abstract}
 
 % ---------------------------------------------------------------------------------------
@@ -56,34 +58,39 @@ of failure from one outcome.
 Simulation removes this limit. We can copy the full state of the physics engine and the
 controller, then run many futures from that exact state that differ only in the random
 pushes that will arrive. The fraction of these futures that end in a fall is the true fall
-probability of that state. We call this \emph{branching ground truth}. We then ask a world
-model for 128 sampled futures from the same state and count how many fall.
+probability of that state (Fig.~\ref{fig:fork}). We call this \emph{branching ground
+truth} (Section~\ref{sec:branch}). We then ask a world model for 128 sampled futures from
+the same state and count how many fall.
 
 With this test we found the following.
 \begin{itemize}
   \item \textbf{A data pitfall.} Our first dataset stopped logging one second after each
     fall, a common choice. Because every training window needs two seconds of future,
     windows that start just before a fall were silently dropped. Only 4\% of training
-    windows with a fall showed it in the first second, while 51\% of real falls happen
-    there (Fig.~\ref{fig:trunc}). This alone halved the predicted risk.
+    windows with a fall showed it in the first second, while 51\% of all falls in our test
+    set (35\% of those at uncertain states) happen there (Fig.~\ref{fig:trunc}). This
+    alone halved the predicted risk.
   \item \textbf{A model bias.} With clean data and 64 sampling steps, diffusion and
     conditional flow matching (CFM) still predict only 57\% and 65\% of the true risk at
-    uncertain states. Eight times more steps (512) helps but does not close the gap (77\%
-    and 83\%). A classifier trained on the same data, with the same inputs and network,
-    predicts 92\%. So the bias comes from the generative models, not from the data.
-  \item \textbf{A fix.} \cncm{}, a continuous version of next-concept
+    uncertain states, and 41\% and 46\% on a second test set. Eight times more steps (512)
+    helps but does not close the gap (77\% and 83\%). A classifier trained on the same
+    data, with the same inputs and network, predicts 92\%. So the bias is not a property
+    of the data alone.
+  \item \textbf{A coarse-to-fine model.} \cncm{}, a continuous version of next-concept
     modeling~\cite{kumbong2026ncm}, samples a 4-step summary of the future first and then
-    adds detail in five more levels. It predicts 105\% of the true risk (95\% CI 95--117\%).
-    At equal bias it needs far less compute: 96 network passes give the 83\% that CFM
-    needs 512 passes for.
+    adds detail in five more levels. It predicts 105\% of the true risk (95\% CI
+    95--117\%), and 89\% on the second test set. At equal bias it needs far less compute:
+    96 network passes give the 83\% that CFM needs 512 passes for.
   \item \textbf{Clear limits.} \cncm{} does not rank states better than the other
     models. Every model, including the classifier, reaches about the same per-state
-    accuracy (AUC near 0.90), and isotonic recalibration of CFM on held-out data matches
-    \cncm{}. Most states that are certain to fall, and that all models miss, are
-    deterministic failures of the controller rather than effects of random pushes.
+    accuracy (AUC near 0.90 over all states, but only 0.63--0.65 among the uncertain
+    ones), and isotonic recalibration of CFM on held-out data matches the per-state
+    accuracy of \cncm{}. Most states that are certain to fall, and that all models miss,
+    are deterministic failures of the controller rather than effects of random pushes.
 \end{itemize}
-We wrote down our hypotheses before running the final test (pre-registration), including
-the cases where our method would lose. Two of four hypotheses held. We report all four.
+We wrote down our hypotheses before running the final test
+(pre-registration~\cite{nosek2018prereg}), including the cases where our method would lose.
+Two of four hypotheses held. We report all four.
 
 % ---------------------------------------------------------------------------------------
 \section{Related Work}
@@ -104,9 +111,10 @@ decision-making should be judged by how well they support decisions, with uncert
 calibration as one of the key axes~\cite{yu2026evaluate}. dWorldEval estimates policy
 success rates with a world model and compares them with real execution~\cite{li2026dworldeval}.
 Multi-future ground truth exists in other fields: the Garden of Forking Paths gives several
-plausible futures for pedestrians~\cite{liang2020garden}, ForecastBench-Sim re-seeds a
-strategy game to score forecasts~\cite{lee2026forecastbench}, and Twin Rollouts forks a
-simulator to create counterfactual targets for video world models~\cite{ma2026twin}. Our
+plausible futures for pedestrians~\cite{liang2020garden}, ForecastBench-Sim scores
+forecasts by continuing a strategy game from saved snapshots~\cite{lee2026forecastbench},
+and Twin Rollouts branches the rollouts of a video world model itself, with coupled noise,
+to create counterfactuals~\cite{ma2026twin}. Our
 branches are exact copies of the physics and controller state, and the quantity we score
 is the probability of failure.
 
@@ -159,7 +167,8 @@ episodes that end soon after a failure.
   stairs, then the simulator and controller are copied exactly. Both copies receive the
   same commands. They differ only in the random pushes that arrive later. In future~A the
   robot keeps walking; in future~B a push in the first 0.4\,s makes it fall. Repeating this 128 times
-  gives the true fall probability of the starting state (here 34\%). A world model is
+  gives the true fall probability of the starting state (here 44 of 128 futures fall,
+  34\%; the two futures shown come from a re-simulation of the same state). A world model is
   asked for 128 futures from the same state, and we compare how many of them fall.}
   \label{fig:fork}
 \end{figure*}
@@ -174,7 +183,8 @@ squares with friction-cone clipping, Raibert-style foot placement~\cite{raibert1
 analytic leg inverse kinematics. Joint PD control with feed-forward torque runs at
 500\,Hz, as on the real robot. Each episode lasts 10\,s and has a random terrain type
 (flat, rough, slope or stairs), friction (0.4--1.2), payload (0--3\,kg), motor strength
-($\pm$10\%), joint damping ($\times$0.7--1.3) and heading. Commands change in random
+($\pm$10\%), joint damping ($\times$0.7--1.3) and heading. The controller uses the nominal
+body mass, so the payload acts as an unmodelled disturbance. Commands change in random
 segments that pick a gait (stand, walk, trot, bound, pace) and a velocity.
 
 \subsection{Random pushes}
@@ -193,20 +203,29 @@ the planned commands for the next 2\,s. It must predict the next 100 states (2\,
 model knows the push level of the episode but not when pushes will come. Those future
 pushes are the randomness the model has to represent. A future counts as a \emph{fall} if
 the body tilts more than 1\,rad from vertical or the base drops below 0.12\,m at any step.
+The same test is applied to true and sampled futures. (The simulator's own test, which ends
+an episode and decides which states can be anchors, uses roll or pitch above 1\,rad. Since
+the tilt is at least as large as either angle, our test fires at the same step or a few
+steps earlier.)
 
 \subsection{Branching ground truth}
 \label{sec:branch}
 At an anchor state we copy the MuJoCo state and the full controller state (including gait
 phase and internal memory), keep the command random stream, and give each copy a new push
 seed. Copies with the same push seed reproduce each other exactly. We run 128 copies for
-2\,s and take the fraction that fall as the true fall probability $p$.
+2\,s and take the fraction that fall as the true fall probability $p$. Note that $p$ is
+conditioned on the full controller state, including internal memory (integrators, a
+filtered ground-height estimate, swing-foot lift-off points) that a world model sees only
+indirectly, through the last 0.5\,s of states.
 
 The test set has 320 new episodes that were never used before the final run, with four
 random anchor times each between 1.5\,s and 7.6\,s (anchors after a fall are skipped),
 giving 1,149 anchors. We call an anchor a \emph{fork} when $0.05 < p < 0.95$, meaning the
 outcome really depends on the pushes; there are 319 forks, with mean true fall probability
 0.164. Anchors in push-free episodes are deterministic ($p$ is exactly 0 or 1). A separate
-set of 1,163 anchors from another 320 episodes is used only to fit recalibration maps.
+set of 1,163 anchors (316 forks) from another 320 episodes was set aside to fit
+recalibration maps; we also report the raw scores of the models on it as a second test set
+(Section~\ref{sec:second}).
 
 \subsection{Training data}
 We generate 6,016 episodes and split them by seed into 4,812 training, 602 validation and
@@ -224,7 +243,8 @@ $\frac{1}{n}\sum(\hat p - p)^2$ on forks and on all anchors, the area under the 
 distance~\cite{szekely2013energy} between sampled and true futures. Predictions are
 averaged over three training seeds. Confidence intervals are 95\% bootstrap intervals over
 anchors with 10,000 resamples~\cite{efron1994bootstrap}; differences between models are
-paired on the same anchors.
+paired on the same anchors. Resampling whole episodes instead (four anchors share an
+episode) widens the intervals only slightly.
 
 % ---------------------------------------------------------------------------------------
 \section{Models}
@@ -259,10 +279,11 @@ from 0.75 to 0.25 across levels), so that each level learns to tolerate mistakes
 the levels before it. The loss of level $k$ is weighted by $\ell_k^{1-\alpha}$ with
 $\alpha = 0.5$. At test time we sample level by level with 64 Euler steps per level.
 Unlike NCM, there is no vector quantization and no categorical distribution; every level
-is continuous. With 64 steps per level, \cncm{} uses $6\times64 = 384$ network passes per sample against
-64 for CFM; on our GPU (RTX A5000) drawing 128 futures takes 1.9--2.0\,s per anchor with
-\cncm{} and 0.73\,s with CFM. Section~\ref{sec:steps} compares the models at equal
-numbers of passes.
+is continuous. With 64 steps per level, \cncm{} uses $6\times64 = 384$ network passes per
+sample against 64 for CFM, although most of its passes run on short sequences. In our
+evaluation runs, which shared one GPU (RTX A5000) between several processes, drawing 128
+futures took 6.0--7.4\,s per anchor with \cncm{} and about 3.1\,s with CFM.
+Section~\ref{sec:steps} compares the models at equal numbers of passes.
 
 \textbf{Classifier.} To see whether the inputs hold the information needed to predict a
 fall, we train a plain classifier with the same encoders and transformer. A class token
@@ -290,11 +311,16 @@ Our first dataset stopped logging 50 steps (1\,s) after a fall, which saves spac
 a common choice. Each training window, however, needs 100 future steps. A window that
 starts less than 50 steps before a fall would run past the end of the log, so it is never
 created. As a result, only 4\% of the training windows that contain a fall show the fall
-in the first second of the window, while 51\% of the real falls in our test forks happen
-in the first second (Fig.~\ref{fig:trunc}). The models learn that a fall rarely happens
-soon, and they predict far too little risk: CFM and diffusion trained on this data
+in the first second of the window, while 51\% of all falls in our test set (35\% of the
+falls at forks) happen in the first second (Fig.~\ref{fig:trunc}). By the simulator's own
+roll/pitch test no truncated training window shows a fall that early; the 4\% are windows
+in which our tilt test fires a few steps before it. The models learn that a fall rarely
+happens soon, and they predict far too little risk: CFM and diffusion trained on this data
 predict 36\% and 31\% of the true risk at forks, about half of what the same models predict
-after the fix (Fig.~\ref{fig:ratio}).
+after the fix (Fig.~\ref{fig:ratio}). Even a model that learned the truncated data
+perfectly would not reach 100\%: it would learn the chance of a late fall given no early
+fall, which gives about 70\% at our test forks. CFM and diffusion reach 52\% and 44\% of
+that value, a shortfall of the same order as on the fixed data (65\% and 57\%).
 
 We fixed the generator to log 100 steps after a fall and regenerated all 6,016 training
 episodes from the same seeds. All states before each fall are identical to the old data
@@ -313,8 +339,9 @@ report it to show how easily such a pitfall can produce convincing but wrong res
   \centering
   \includegraphics[width=\columnwidth]{figs/fig4_truncation.pdf}
   \caption{\textbf{The logging pitfall.} For falls inside a 2\,s window, the share that
-  happened by each time. Real falls (black) are spread over the window, and half of them
-  happen in the first second. When logging stops 1\,s after a fall (red), windows that
+  happened by each time. Real falls in the test set (black) are spread over the window, and
+  half of them happen in the first second (35\% of the falls at forks). When logging stops
+  1\,s after a fall (red), windows that
   start just before a fall are never created, so models almost never see a fall in the
   first second. Logging 100 steps after a fall (green) fixes this.}
   \label{fig:trunc}
@@ -338,6 +365,18 @@ numbers. CFM predicts 65\% of the true risk at forks (95\% CI 57--74\%) and diff
 (CI 0.34--0.47). Fig.~\ref{fig:example} shows one fork: 44 of 128 true futures fall, CFM
 samples 18 falls, diffusion 12 and \cncm{} 46.
 
+\subsection{A second test set}
+\label{sec:second}
+The pre-registration set aside a second set of 1,163 anchors (316 forks, mean true fall
+probability 0.155) only to fit recalibration maps. Scoring the same models on it, which we
+decided after the test, gives the same picture with smaller ratios: CFM 0.46 (CI
+0.40--0.54), diffusion 0.41 (0.35--0.47) and \cncm{} 0.89 (0.78--1.01). The gap between
+\cncm{} and CFM is the same as on the test set (0.42, CI 0.36--0.50), so H1 and H2 would
+also pass here. We did not score the classifier on this set. The flat models differ between
+the two sets by more than their intervals suggest, and the sets also differ in which
+terrains produce forks. We do not know the cause. The spread between the two sets is a
+better guide to how precise our ratios are than the interval of either set alone.
+
 \begin{table*}[t]
   \centering
   \caption{Main results on the 1,149 test anchors (319 forks). Ratio: mean predicted over
@@ -354,7 +393,7 @@ samples 18 falls, diffusion 12 and \cncm{} 46.
   \caption{\textbf{Risk ratio at forks} (mean predicted over mean true fall probability,
   95\% CI). Top: models trained on the truncated data. Bottom: the same models trained on
   the fixed data, and a classifier with the same inputs and network. Diffusion and CFM
-  underestimate risk in both cases; \cncm{} is unbiased on the fixed data.}
+  underestimate risk in both cases; \cncm{} is close to 1 on the fixed data.}
   \label{fig:ratio}
 \end{figure}
 
@@ -379,6 +418,14 @@ probability between 0.05 and 0.5, CFM and diffusion lie below the diagonal; at t
 ($p<0.05$: 0.015 against a true 0.006). All models fall far short at anchors with
 $p > 0.5$, which we look at in Section~\ref{sec:certain}.
 
+Grouping anchors by their \emph{true} probability, as in Fig.~\ref{fig:calib}, makes any
+predictor with imperfect information look pulled toward the mean (too high at low $p$, too
+low at high $p$), even when it is calibrated. Grouped by the \emph{prediction} instead, as
+in a standard reliability diagram, CFM under-predicts in every group (for predictions of
+0.2--0.4: 0.29 against a true 0.36; above 0.4: 0.72 against 0.79). \cncm{} under-predicts
+less at low predictions (0.1--0.2: 0.15 against 0.19), is calibrated at 0.2--0.4 (0.27
+against 0.27), and over-predicts when it is confident (0.69 against 0.60 above 0.4).
+
 \begin{figure}[t]
   \centering
   \includegraphics[width=\columnwidth]{figs/fig6_calibration.pdf}
@@ -392,15 +439,26 @@ $p > 0.5$, which we look at in Section~\ref{sec:certain}.
 Getting the average right is not the same as getting each state right. On per-state
 accuracy \cncm{} does not win. Its fork Brier score is 0.0274 against 0.0246 for CFM; the
 difference, +0.0028, has a CI from $-0.0029$ to $+0.0091$, so we cannot tell them apart.
-All three generative models rank anchors equally well (AUC 0.894--0.902). Its energy
-distance is worse (0.431 against 0.373), so its sampled trajectories are less accurate in
-detail, even though they fall at the right rate.
+These scores are for the average of three seeds. A single \cncm{} model is less accurate:
+its fork Brier score is 0.0273--0.0333 across seeds (mean 0.0310), against 0.0247--0.0266
+(mean 0.0257) for CFM. All three generative models rank anchors equally well (AUC
+0.894--0.902). Most of this ranking ability comes from the easy anchors: 617 of the 1,149
+have $p$ exactly 0 or 1, and among the forks alone the AUC is only 0.63--0.65 for all four
+models, including the classifier. The energy distance of \cncm{} is worse (0.431 against
+0.373), so its sampled trajectories are less accurate in detail. Its samples also end
+\emph{teetering} near the fall threshold (final tilt 0.9--1.5\,rad) about twice as often as
+the true futures at forks (0.049 against 0.026; CFM 0.021). Its extra falls may therefore
+partly be noisy samples that cross the threshold. We did not test stricter fall
+definitions.
 
 Because the models rank states equally well, the CFM bias can be removed after training.
 An isotonic map from predicted to true probability, fit on the separate calibration set,
 brings CFM's fork Brier score to 0.0245, the same as recalibrated \cncm{} (difference
 +0.0003, CI $-0.0048$ to $+0.0053$). On all anchors, raw \cncm{} is slightly worse than
-recalibrated CFM (+0.0033, CI 0.0007 to 0.0061). Recalibration needs held-out data with
+recalibrated CFM (+0.0033, CI 0.0007 to 0.0061). Recalibration fixes per-state accuracy but
+over-corrects the average: after it, all three ratios are 1.09--1.12
+(Table~\ref{tab:main}), because the calibration set and the test set differ
+(Section~\ref{sec:second}). Recalibration needs held-out data with
 known outcomes and fixes the predicted number, not the sampled futures; \cncm{} gets the
 rate right in its samples without extra data. We return to what this means in
 Section~\ref{sec:disc}.
@@ -414,7 +472,12 @@ the inputs and the amount of data seem to set the limit, not the way the world m
 trained. The classifier is, however, close to unbiased overall (ratio 0.92, CI 0.82--1.04).
 This is the key control for our main claim: a model trained on the same data does not
 underestimate risk the way diffusion and CFM do, so their bias is not a property of the
-data.
+data alone. The two kinds of model also differ in training protocol. The classifier was
+stopped early on validation episodes, while the generative models were trained for a fixed
+40,000 steps with no held-out check. A classifier trained for 20,000 steps without early
+stopping is still nearly unbiased (ratio 0.91), although its per-state accuracy collapses
+(fork Brier 0.110). So over-training alone does not make a model underestimate risk, but we
+did not test the generative models for over-fitting directly.
 
 \subsection{States that are certain to fall}
 \label{sec:certain}
@@ -423,7 +486,9 @@ low probability: CFM predicts below 0.4 for 19 of them, diffusion for 22, \cncm{
 and the classifier for 17. Fig.~\ref{fig:certain} shows why these are hard. Nineteen of
 the 41 come from push-free episodes, where all 128 futures are identical, and many fall
 late in the window (after 1.5\,s) on stairs or slopes. These are failures of the
-controller itself, decided by small details of the current state. They are a different
+controller itself, decided by small details of the current state, some of which may be
+internal controller state that the models see only indirectly
+(Section~\ref{sec:branch}). They are a different
 problem from the random forks this paper is about, and no model we tried predicts them
 well.
 
@@ -450,7 +515,9 @@ More steps do help the flat models, but slowly. CFM goes from 0.67 at 64 steps t
 Each doubling adds less than the one before, and even at 512 steps the upper end of the
 CI is below 1 (CFM 0.74--0.93, diffusion 0.68--0.86). \cncm{} reaches 0.83 with 96 passes,
 0.97 with 192 and 1.06 with 384. So, at an equal level of bias, \cncm{} needs about five
-times fewer passes, and no flat model we ran reached an unbiased ratio. More steps did not
+times fewer passes, and no flat model we ran reached an unbiased ratio. The ratio of
+\cncm{} was still rising at 384 passes, and we did not sample it with more than 64 steps per
+level, so it may overshoot 1 with more steps. More steps did not
 change the per-state picture: CFM's fork Brier score stays at 0.0256--0.0257 from 128 to
 512 steps.
 
@@ -464,7 +531,7 @@ the distribution that a coarse integration of the flat model loses first.
   \caption{\textbf{Risk ratio against sampling compute} (seed-0 models, test set, 95\%
   CI). CFM and diffusion use one network pass per step; \cncm{} uses one per step at each
   of its six levels. Flat models improve slowly with more steps and stay biased at 512
-  passes; \cncm{} is unbiased from about 200 passes.}
+  passes; \cncm{} reaches a ratio near 1 at 200--400 passes and is still rising there.}
   \label{fig:steps}
 \end{figure}
 
@@ -479,10 +546,11 @@ $100\times46$ numbers at once, and a model trained with a squared loss tends to 
 over rare sub-modes~\cite{lin2026subflow}. \cncm{} makes the choice first, on a 4-step
 summary where a fall and a recovery look very different, and only then fills in the
 detail. The step sweep fits this view: the flat models lose falls first when integration
-is coarse, and they recover them only slowly as steps are added. Our ablations on the truncated data agree with this picture: starting from a
-4-step level worked better than starting from 16 steps, and removing the residuals or the
-corruption reduced the gain (Appendix~\ref{app:v2}). This is a hypothesis that fits our
-results, not something we have proven.
+is coarse, and they recover them only slowly as steps are added. Our ablations on the
+truncated data agree with this picture: starting from a 4-step level worked better than
+starting from 16 steps, and removing the residuals or the corruption reduced the gain
+(Appendix~\ref{app:v2}). This is a hypothesis that fits our results, not something we have
+proven.
 
 \textbf{What does this mean in practice?} If a team has held-out data with known
 outcomes, isotonic recalibration of a flat model's fall probability works as well as
@@ -496,10 +564,14 @@ conditions. We did not test either point, and both deserve a direct test.
 \textbf{Limitations.} All results are in simulation, with one robot, one hand-built
 controller and one kind of randomness (pushes). The controller has its own failures, which
 dominate the states that are certain to fall. We used one network size and one horizon
-(2\,s). At the same number of steps per level, \cncm{} is about 2.7 times slower to sample than
-CFM in our implementation (though at equal bias it is cheaper), and its trajectories are
-less accurate in detail. The step sweep used one seed. The ablations were run before the data fix and
-with one seed.
+(2\,s). At the same number of steps per level, \cncm{} took about 2--2.4 times longer to
+sample than CFM in our runs (though at equal bias it is cheaper), and its trajectories are
+less accurate in detail. Our two test sets give noticeably different ratios
+(Section~\ref{sec:second}). A future counts as a fall as soon as one step crosses the
+threshold, and we did not check how the ratios change under stricter definitions. The true
+probability depends on internal controller state that the models do not observe directly.
+The generative models were not checked for over-fitting to their training episodes. The
+step sweep used one seed. The ablations were run before the data fix and with one seed.
 
 % ---------------------------------------------------------------------------------------
 \section{Conclusion}
@@ -509,10 +581,10 @@ as often as failures really happen. Exact branching in simulation gives the answ
 Diffusion and flow-matching world models underestimate the risk of falling. Part of the
 gap came from a common logging pitfall, and the rest comes from the models themselves,
 since a classifier trained on the same data is nearly unbiased. Adding sampling steps
-narrows the gap only slowly. Generating the future
-coarse-to-fine with \cncm{} removes the bias, although it does not improve how well states
-are ranked. We hope branching ground truth becomes a standard check for world models used
-in safety-critical planning.
+narrows the gap only slowly. Generating the future coarse-to-fine with \cncm{} brings the
+predicted risk close to the truth (105\% and 89\% on our two test sets), although it does
+not improve how well states are ranked. We hope branching ground truth becomes a standard
+check for world models used in safety-critical planning.
 
 \bibliographystyle{IEEEtran}
 \bibliography{refs}
@@ -531,8 +603,10 @@ decision rules. It also fixed the reading in advance: if H1 failed, the earlier
 underestimate would be reported as caused by the data pitfall, and a claim that \cncm{} is
 better would need both H3 and H4. All secondary measures in this paper (all-anchor Brier,
 AUC, energy, calibration bins, the old models on the new test set) were listed there as
-``reported regardless of outcome''. The classifier, the analysis of certain-fall states and the sampling-step sweep were
-added after the test, as diagnostics.
+``reported regardless of outcome''. The classifier, the analysis of certain-fall states,
+the sampling-step sweep, the scores on the second test set, the per-seed and fork-only
+measures, and the reliability grouping by prediction were added after the test, as
+diagnostics.
 
 \subsection{Results on the truncated data and ablations}
 \label{app:v2}
@@ -542,6 +616,13 @@ Before the data fix we ran a pre-registered test on another fresh set of 1,163 a
 CFM ($-0.0037$, CI $-0.0054$ to $-0.0021$). Training CFM twice as long (80k steps) gave
 0.34, and \cncm{} without corruption gave 0.45. Table~\ref{tab:ablate} lists the ablations,
 all on an exploratory set of 1,170 anchors (280 forks), one seed, 64 steps.
+
+These ratios should not be read against 1. A model that learned the truncated data
+perfectly would predict the chance of a late fall given no early fall, which is about 0.70
+of the true risk at the forks of our final test set (Section~\ref{sec:trunc}); we expect a
+similar value on the exploratory set. Against this reference, the main \cncm{} (0.75) is
+close to what its data supports, the full pyramid (1.06) overshoots it, and the other
+variants fall short of it.
 
 \begin{table}[h]
   \centering

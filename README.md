@@ -3,8 +3,8 @@
 ![Same start state, two futures: one recovers, one falls after a push](paper/figs/fork.gif)
 
 *One state on stairs, copied exactly. Both copies get the same commands and differ only in
-the random pushes that arrive later (red border = push). Over 128 copies, 34% of the
-futures from this state fall.*
+the random pushes that arrive later (red border = push). In the test set's 128 copies of
+this state, 44 (34%) fall; the GIF is a local re-simulation of the same state.*
 
 Do diffusion and flow-matching world models predict robot failures as often as they really
 happen? We simulate a Unitree Go2 in MuJoCo walking on varied terrain while random pushes
@@ -35,10 +35,14 @@ falls (16 early), CFM 18 and diffusion 12 (almost all late), C-NCM 46.*
 - Logging stopped 1 s after a fall in our first dataset, which hid early falls from the
   fixed-length training windows and halved the predicted risk (CFM 0.36). All numbers
   above use the fixed data.
+- On a second test set (1,163 states, 316 forks; set aside for recalibration) the same
+  models give CFM 0.46, diffusion 0.41 and C-NCM 0.89: the same picture with smaller ratios.
 - More sampling steps help the flat models slowly: CFM reaches 0.83 and diffusion 0.77 at
-  512 steps. C-NCM reaches 0.83 with 96 network passes and 0.97 with 192.
+  512 steps. C-NCM (seed 0) reaches 0.83 with 96 network passes, 0.97 with 192 and 1.06
+  with 384, and was still rising.
 - C-NCM does not rank states better: the Brier difference to CFM is not significant, and
-  isotonic recalibration of CFM on held-out data matches it.
+  isotonic recalibration of CFM on held-out data matches its per-state accuracy. Among
+  the forks alone, every model ranks states poorly (AUC 0.63-0.65).
 - The final test was pre-registered (`PREREG_v3.md`): H1 and H2 held, H3 and H4 did not.
 
 <p>
@@ -55,7 +59,8 @@ Right: the same ratio against sampling compute; flat models improve slowly with 
 
 When logging stops 1 s after a fall, every training window that starts just before a fall
 runs past the end of the log and is never created. Only 4% of training windows with a fall
-then show it in the first second, while 51% of real falls happen there. Logging 100 steps
+then show it in the first second, while 51% of all test-set falls (35% of those at forks)
+happen there. Logging 100 steps
 after a fall fixes it, and `models/data.py` now refuses data with a shorter tail.
 
 ## How C-NCM builds a future
@@ -113,6 +118,7 @@ python generate2.py --start 970000 --count 5 --stride 10 --anchors 4 --branches 
     --horizon 100 --post-fall 100 --out ../data/final/branch_000.h5
 
 cd ../models
+mkdir -p ../data/v2   # the terrain cache path is fixed in train.py, evaluate.py and others
 python data.py ../data/v2/terrain_cache.h5 "../data/v3/train_*.h5" "../data/final/branch_*.h5"
 D='--data ../data/v3/train_*.h5 --horizon 100 --batch 256 --duty 1 --d 256 --depth 4 --steps 40000'
 python train.py --name v3_cfm_s0  $D --seed 0 --levels H
@@ -126,3 +132,11 @@ python scripts/render_fork.py --gif figs/fork.gif   # Go2 renders and the GIF (r
 python scripts/make_figs.py        # figures and the main table
 tectonic -X compile main.tex
 ```
+
+The block above leaves out these steps (each has a cluster job):
+
+- the calibration set (`sim/gen_confirm.sbatch`, seeds 950000 + 10i) and the evaluations on
+  it (`models/train_v3a.sbatch`, `models/train_v3b.sbatch`), which `v3_stats.py` needs;
+- the classifier (`models/fallclf.sbatch`);
+- `paper/scripts/fig_data.py` (data for the figures that need the cluster);
+- copying the result files from `results/` to `paper/data/`, which `make_figs.py` reads.
